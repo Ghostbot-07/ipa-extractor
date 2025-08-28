@@ -2,12 +2,13 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>IPA URL Scheme Extractor</title>
+  <title>IPA URL Scheme Extractor (JSZip Fallback)</title>
   <style>
     body { font-family: monospace; background: #fafafa; padding: 20px; }
     h2 { color: #333; }
     pre { background: #222; color: #0f0; padding: 10px; white-space: pre-wrap; word-wrap: break-word; }
     .highlight { background: #000; color: #ff0; padding: 5px; display: block; margin-bottom: 10px; }
+    .error { color: red; font-weight: bold; }
   </style>
 </head>
 <body>
@@ -18,45 +19,64 @@
   <h3>📄 Full Info.plist Output:</h3>
   <pre id="output"></pre>
 
-  <!-- ✅ Corrected script source -->
-  <script src="https://unpkg.com/ipa-extract-info/browser.js"></script>
+  <!-- ✅ JSZip + plist.js for browser -->
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/plist@3.0.6/dist/plist.min.js"></script>
+
   <script>
     const fileInput = document.getElementById('fileInput');
     const output = document.getElementById('output');
     const schemesDiv = document.getElementById('schemes');
 
-    fileInput.addEventListener('change', function () {
+    fileInput.addEventListener('change', async function () {
       const file = this.files[0];
       if (!file) return;
 
-      const reader = new FileReader();
-      reader.onload = function (e) {
-        ipaExtractInfo(e.target.result, function (err, info, raw) {
-          if (err) {
-            output.textContent = 'Error: ' + err;
-          } else {
-            output.textContent = JSON.stringify(info, null, 2);
+      output.textContent = "📦 Reading IPA...";
+      schemesDiv.innerHTML = "";
 
-            // Extract URL schemes
-            schemesDiv.innerHTML = '';
-            if (info.CFBundleURLTypes) {
-              info.CFBundleURLTypes.forEach(type => {
-                if (type.CFBundleURLSchemes) {
-                  type.CFBundleURLSchemes.forEach(scheme => {
-                    const el = document.createElement('div');
-                    el.className = 'highlight';
-                    el.textContent = scheme;
-                    schemesDiv.appendChild(el);
-                  });
-                }
-              });
-            } else {
-              schemesDiv.innerHTML = '<i>No URL schemes found.</i>';
-            }
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const zip = await JSZip.loadAsync(arrayBuffer);
+
+        // Find Info.plist inside Payload/.../
+        let plistFile;
+        Object.keys(zip.files).forEach(path => {
+          if (path.match(/Payload\/.+\.app\/Info.plist$/)) {
+            plistFile = zip.files[path];
           }
         });
-      };
-      reader.readAsArrayBuffer(file);
+
+        if (!plistFile) {
+          output.textContent = "❌ Info.plist not found in IPA.";
+          return;
+        }
+
+        const plistData = await plistFile.async("text");
+        const info = plist.parse(plistData);
+
+        output.textContent = JSON.stringify(info, null, 2);
+
+        // Extract URL schemes
+        if (info.CFBundleURLTypes) {
+          info.CFBundleURLTypes.forEach(type => {
+            if (type.CFBundleURLSchemes) {
+              type.CFBundleURLSchemes.forEach(scheme => {
+                const el = document.createElement('div');
+                el.className = 'highlight';
+                el.textContent = scheme;
+                schemesDiv.appendChild(el);
+              });
+            }
+          });
+        } else {
+          schemesDiv.innerHTML = "<i>No URL schemes found.</i>";
+        }
+
+      } catch (err) {
+        output.textContent = "❌ Error: " + err;
+        console.error(err);
+      }
     });
   </script>
 </body>
