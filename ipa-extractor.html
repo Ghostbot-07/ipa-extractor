@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>IPA URL Scheme Extractor</title>
+  <style>
+    body { font-family: monospace; background: #fafafa; padding: 20px; }
+    h2 { color: #333; }
+    pre { background: #222; color: #0f0; padding: 10px; white-space: pre-wrap; word-wrap: break-word; }
+    .highlight { background: #000; color: #ff0; padding: 5px; display: block; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+  <h2>IPA URL Scheme Extractor</h2>
+  <input type="file" id="fileInput" accept=".ipa">
+  <h3>🔑 URL Schemes Found:</h3>
+  <div id="schemes"></div>
+  <h3>📄 Full Info.plist Output:</h3>
+  <pre id="output"></pre>
+
+  <script src="https://unpkg.com/ipa-extract-info/dist/ipa-extract-info.min.js"></script>
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const output = document.getElementById('output');
+    const schemesDiv = document.getElementById('schemes');
+
+    fileInput.addEventListener('change', function () {
+      const file = this.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        ipaExtractInfo(e.target.result, function (err, info, raw) {
+          if (err) {
+            output.textContent = 'Error: ' + err;
+          } else {
+            output.textContent = JSON.stringify(info, null, 2);
+
+            // Extract URL schemes
+            schemesDiv.innerHTML = '';
+            if (info.CFBundleURLTypes) {
+              info.CFBundleURLTypes.forEach(type => {
+                if (type.CFBundleURLSchemes) {
+                  type.CFBundleURLSchemes.forEach(scheme => {
+                    const el = document.createElement('div');
+                    el.className = 'highlight';
+                    el.textContent = scheme;
+                    schemesDiv.appendChild(el);
+                  });
+                }
+              });
+            } else {
+              schemesDiv.innerHTML = '<i>No URL schemes found.</i>';
+            }
+          }
+        });
+      };
+      reader.readAsArrayBuffer(file);
+    });
+  </script>
+</body>
+</html>
